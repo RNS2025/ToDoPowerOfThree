@@ -4,10 +4,6 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <GHPages>true</GHPages>
-    <StaticWebAssetBasePath>/ToDoPowerOfThree
-    </StaticWebAssetBasePath>
   </PropertyGroup>
 
   <ItemGroup>
