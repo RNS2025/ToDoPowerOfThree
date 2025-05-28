@@ -1,7 +1,7 @@
 @using PowerOfThree.Models
 @using PowerOfThree.Services
 @inject TaskManager TaskManager
-@inject IJSRuntime JSRuntime // Added IJSRuntime
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
 <div class="today-tasks-card">
@@ -121,7 +121,7 @@
 <!-- Completion Celebration Modal -->
 @if (showCompletionModal)
 {
-    <div class="modal-overlay" @onclick="CloseCompletionModal" id="todayTasksCompletionModal"> 
+    <div class="modal-overlay" @onclick="CloseCompletionModal" id="todayTasksCompletionModal">
         <div class="completion-modal" @onclick:stopPropagation="true">
             <div class="modal-content">
                 <span class="celebration-icon">🎉</span>
@@ -136,23 +136,88 @@
     </div>
 }
 
+@if (todaySelection == null && !initialNotificationPromptDone)
+{
+    <div class="notification-prompt">
+        <p>Enable notifications to get reminders for your Power of Three tasks!</p>
+        <button class="mode-button" @onclick="RequestNotifications">🔔 Enable Reminders</button>
+    </div>
+}
+
+@if (canShowTestNotificationButton)
+{
+    <div class="test-notification-section" style="margin-top: 15px; text-align: center;">
+        <button class="mode-button" @onclick="ShowTestNotificationAsync">🧪 Test Notification</button>
+    </div>
+}
+
 @code {
     private DailyTaskSelection? todaySelection;
     private bool showCompletionModal = false;
     private string completedTaskTitle = "";
+    private bool initialNotificationPromptDone = false;
+    private bool canShowTestNotificationButton = false;
 
     protected override async Task OnInitializedAsync()
     {
         await TaskManager.InitializeAsync();
         todaySelection = TaskManager.GetTodaySelection();
+        await UpdateTodayTasksInDbForPwa(); // Initial DB sync
 
         TaskManager.TodaySelectionChanged += OnTodaySelectionChanged;
         TaskManager.TasksChanged += OnTasksChanged;
+
+        // Check current permission state to see if we need to prompt
+        var permissionState = await JSRuntime.InvokeAsync<string>("pwaGetNotificationPermissionState");
+        if (permissionState == "granted" || permissionState == "denied")
+        {
+            initialNotificationPromptDone = true;
+        }
+        if (permissionState == "granted")
+        {
+            canShowTestNotificationButton = true;
+        }
+    }
+
+    private async Task RequestNotifications()
+    {
+        var permissionResult = await JSRuntime.InvokeAsync<string>("pwaRequestNotificationPermission");
+        initialNotificationPromptDone = true; // User has interacted with the prompt
+        if (permissionResult == "granted")
+        {
+            canShowTestNotificationButton = true;
+        }
+        else
+        {
+            canShowTestNotificationButton = false;
+        }
+        StateHasChanged();
+    }
+
+    private async Task ShowTestNotificationAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("pwaShowTestNotification");
+    }
+
+    private async Task UpdateTodayTasksInDbForPwa()
+    {
+        if (todaySelection != null && todaySelection.SelectedTasks != null)
+        {
+            // Pass only necessary data for PWA
+            var tasksForDb = todaySelection.SelectedTasks.Select(t => new { t.Title, t.IsCompleted }).ToList();
+            await JSRuntime.InvokeVoidAsync("pwaUpdateTodayTasksInDB", tasksForDb);
+        }
+        else
+        {
+            // Send empty list to clear or indicate no tasks
+            await JSRuntime.InvokeVoidAsync("pwaUpdateTodayTasksInDB", new List<object>());
+        }
     }
 
     private async Task GenerateTasks(TaskGenerationMode mode)
     {
         todaySelection = await TaskManager.GenerateTodayTasksAsync(mode);
+        await UpdateTodayTasksInDbForPwa();
         StateHasChanged();
     }
 
@@ -161,41 +226,36 @@
         if (todaySelection != null)
         {
             await GenerateTasks(todaySelection.GenerationMode);
+            // UpdateTodayTasksInDbForPwa is called within GenerateTasks
         }
     }
 
     private async Task ClearSelection()
     {
         await TaskManager.ClearTodaySelectionAsync();
-        todaySelection = null;
+        todaySelection = null; // TaskManager event will also set this
+                               // OnTodaySelectionChanged will handle DB update
         StateHasChanged();
     }
 
-    private async Task ToggleTaskCompletion(TodoTask task) // Changed to async Task
+    private async Task ToggleTaskCompletion(TodoTask task)
     {
         bool wasCompleted = task.IsCompleted;
         task.IsCompleted = !task.IsCompleted;
-
-        if (task.IsCompleted)
-        {
-            task.CompletedAt = DateTime.Now;
-        }
-        else
-        {
-            task.CompletedAt = null;
-        }
+        task.CompletedAt = task.IsCompleted ? DateTime.Now : (DateTime?)null;
 
         await TaskManager.UpdateTaskAsync(task);
-        // StateHasChanged(); // Removed as ShowCompletionModal will call it or it's called by parent
+        // OnTodaySelectionChanged (triggered by TaskManager) should handle DB update.
+        // If not, uncomment below:
+        // await UpdateTodayTasksInDbForPwa();
 
-        // Show positive feedback modal when completing a task
         if (!wasCompleted && task.IsCompleted)
         {
-            await ShowCompletionModal(task); // Call await
+            await ShowCompletionModal(task);
         }
         else
         {
-            StateHasChanged(); // Ensure UI updates if modal isn't shown
+            StateHasChanged();
         }
     }
 
@@ -236,11 +296,22 @@
     private void OnTodaySelectionChanged()
     {
         todaySelection = TaskManager.GetTodaySelection();
-        InvokeAsync(StateHasChanged);
+        InvokeAsync(async () =>
+        {
+            await UpdateTodayTasksInDbForPwa();
+            // Update canShowTestNotificationButton if permission might have changed implicitly
+            var permissionState = await JSRuntime.InvokeAsync<string>("pwaGetNotificationPermissionState");
+            canShowTestNotificationButton = permissionState == "granted";
+            StateHasChanged();
+        });
     }
 
-    private void OnTasksChanged()
+    private void OnTasksChanged() // General tasks changed, re-evaluate if today's selection is affected
     {
+        // This might be redundant if TodaySelectionChanged always fires when relevant.
+        // However, if a task part of today's selection is deleted externally,
+        // todaySelection might need to be re-evaluated and DB updated.
+        // For simplicity, we assume TaskManager handles this and triggers TodaySelectionChanged.
         InvokeAsync(StateHasChanged);
     }
 
