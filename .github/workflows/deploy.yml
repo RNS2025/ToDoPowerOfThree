@@ -23,12 +23,14 @@ jobs:
 
       - name: Publish Blazor WebAssembly App
         run: |
-          dotnet publish PowerOfThree.csproj -c Release -o release --nologo
+          dotnet publish -c Release -o release --nologo
 
       - name: Fix base path for GitHub Pages
         run: |
+          # Debug: Check what files were created
+          find release -name "index.html" -type f
           # Replace the base href to match your GitHub Pages URL
-          sed -i 's/<base href="\/" \/>/<base href="\/PowerOfThree\/" \/>/g' release/wwwroot/index.html
+          find release -name "index.html" -exec sed -i 's/<base href="\/" \/>/<base href="\/PowerOfThree\/" \/>/g' {} \;
 
       - name: Add .nojekyll file
         run: |
