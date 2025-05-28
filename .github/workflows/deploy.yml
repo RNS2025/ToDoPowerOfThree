@@ -5,27 +5,29 @@ on:
     branches:
       - main # Or your default branch
 
+permissions:
+  contents: write # ✅ Grants write access to the GITHUB_TOKEN
+
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout the repository
         uses: actions/checkout@v3
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "8.0.x" # Use a supported version
 
-      - name: Publish
-        run: dotnet publish -c Release -o release
-
-      - name: Copy index.html with updated base href
-        run: sed -i 's/<base href="\/" \/>/<base href=".\/" \/>/' release/wwwroot/index.html
+      - name: Publish Blazor WebAssembly App
+        run: |
+          dotnet publish PowerOfThree.csproj -c Release -o release --nologo
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }} # ✅ Now has write access
           publish_dir: ./release/wwwroot
+          publish_branch: gh-pages
