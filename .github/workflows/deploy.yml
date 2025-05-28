@@ -25,13 +25,6 @@ jobs:
         run: |
           dotnet publish -c Release -o release --nologo
 
-      - name: Fix base path for GitHub Pages
-        run: |
-          # Debug: Check what files were created
-          find release -name "index.html" -type f
-          # Replace the base href to match your GitHub Pages URL
-          find release -name "index.html" -exec sed -i 's/<base href="\/" \/>/<base href="\/PowerOfThree\/" \/>/g' {} \;
-
       - name: Add .nojekyll file
         run: |
           # Prevents GitHub Pages from treating this as a Jekyll site
