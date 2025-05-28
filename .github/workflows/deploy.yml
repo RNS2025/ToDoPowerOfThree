@@ -25,11 +25,6 @@ jobs:
         run: |
           dotnet publish -c Release -o release --nologo
 
-      - name: Add .nojekyll file
-        run: |
-          # Prevents GitHub Pages from treating this as a Jekyll site
-          touch release/wwwroot/.nojekyll
-
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
