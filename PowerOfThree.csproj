@@ -6,7 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <GHPages>true</GHPages>
-    <StaticWebAssetBasePath>/your-repo-name</StaticWebAssetBasePath>
+    <StaticWebAssetBasePath>/ToDoPowerOfThree
+    </StaticWebAssetBasePath>
   </PropertyGroup>
 
   <ItemGroup>
