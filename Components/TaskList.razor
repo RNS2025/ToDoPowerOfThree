@@ -1,0 +1,240 @@
+@using PowerOfThree.Models
+@using PowerOfThree.Services
+@inject TaskManager TaskManager
+@inject IJSRuntime JSRuntime // Added IJSRuntime
+@implements IDisposable
+
+<div class="task-card">
+    <h3>📊 Mission Control Center</h3>
+
+    @if (tasks is not null && tasks.Any())
+    {
+        <div class="task-stats">
+            <div class="stat-item">
+                <div class="stat-number">@tasks.Count</div>
+                <div class="stat-label">Total Tasks</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">@tasks.Count(t => t.IsCompleted)</div>
+                <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">@tasks.Count(t => !t.IsCompleted)</div>
+                <div class="stat-label">Pending</div>
+            </div>
+        </div>
+        <div class="task-filters">
+            <button class="filter-btn @(activeFilter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>
+                All Tasks
+            </button>
+            <button class="filter-btn @(activeFilter == "pending" ? "active" : "")" @onclick='() => SetFilter("pending")'>
+                Pending
+            </button>
+            <button class="filter-btn @(activeFilter == "completed" ? "active" : "")"
+                @onclick='() => SetFilter("completed")'>
+                Completed
+            </button>
+        </div>
+
+        <div class="tasks-list">
+            @foreach (var task in GetFilteredTasks())
+            {
+                <div class="task-item @(task.IsCompleted ? "completed" : "")">
+                    <div class="task-checkbox" @onclick="() => ToggleTaskCompletion(task)">
+                        <input type="checkbox" checked="@task.IsCompleted" />
+                        <span class="checkmark"></span>
+                    </div>
+
+                    <div class="task-content">
+                        <div class="task-header">
+                            <div class="task-title">🎯 @task.Title</div>
+                            <div class="task-actions">
+                                <button class="edit-btn" @onclick="() => StartEdit(task)">✏️</button>
+                                <button class="delete-btn" @onclick="() => DeleteTask(task.Id)">🗑️</button>
+                            </div>
+                        </div>
+
+                        <div class="task-priority priority-@task.Priority.ToLower()">@task.Priority Priority</div>
+
+                        <div class="task-meta">
+                            <span><strong>📅 Deadline:</strong> @task.Deadline.ToShortDateString()</span>
+                            <span><strong>⏱️ Estimated:</strong> @task.EstimatedMinutes min</span>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(task.Description))
+                        {
+                            <div class="task-description">
+                                <strong>📝 Description:</strong> @task.Description
+                            </div>
+                        }
+
+                        @if (task.SubTasks.Any())
+                        {
+                            <div class="task-subtasks">
+                                <strong>🔧 Subtasks:</strong>
+                                <div class="subtask-list">
+                                    @foreach (var st in task.SubTasks)
+                                    {
+                                        <div class="subtask-item">⚙️ @st</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (task.IsCompleted && task.CompletedAt.HasValue)
+                        {
+                            <div class="completion-info">
+                                <span class="completed-badge">✅ Completed on @task.CompletedAt.Value.ToString("MMM dd, yyyy")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <div class="empty-icon">🤖</div>
+            <h4>No missions in the database</h4>
+            <p>Create your first mission above to get started!</p>
+        </div>
+    }
+</div>
+
+<!-- Completion Celebration Modal -->
+@if (showCompletionModal)
+{
+    <div class="modal-overlay" @onclick="CloseCompletionModal" id="taskListCompletionModal">
+        <div class="completion-modal" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="celebration-icon">🎉</div>
+                <h2>Awesome Work!</h2>
+                <p>You completed: <strong>"@completedTaskTitle"</strong></p>
+                <div class="celebration-message">
+                    @GetRandomCelebrationMessage()
+                </div>
+                <div class="modal-actions">
+                    <button class="celebrate-btn" @onclick="CloseCompletionModal">
+                        Keep Going! 🚀
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback<TodoTask> OnEditTask { get; set; }
+
+    private List<TodoTask> tasks = new();
+    private string activeFilter = "all";
+    private bool showCompletionModal = false;
+    private string completedTaskTitle = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await TaskManager.InitializeAsync();
+        tasks = TaskManager.GetAllTasks();
+
+        TaskManager.TasksChanged += OnTasksChanged;
+    }
+
+    private void OnTasksChanged()
+    {
+        tasks = TaskManager.GetAllTasks();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private List<TodoTask> GetFilteredTasks()
+    {
+        return activeFilter switch
+        {
+            "pending" => tasks.Where(t => !t.IsCompleted).OrderBy(t => t.Deadline).ToList(),
+            "completed" => tasks.Where(t => t.IsCompleted).OrderByDescending(t => t.CompletedAt).ToList(),
+            _ => tasks.OrderBy(t => t.IsCompleted).ThenBy(t => t.Deadline).ToList()
+        };
+    }
+
+    private void SetFilter(string filter)
+    {
+        activeFilter = filter;
+    }
+
+    private async Task ToggleTaskCompletion(TodoTask task) // Changed to async Task
+    {
+        bool wasCompleted = task.IsCompleted;
+        task.IsCompleted = !task.IsCompleted;
+
+        if (task.IsCompleted)
+        {
+            task.CompletedAt = DateTime.Now;
+        }
+        else
+        {
+            task.CompletedAt = null;
+        }
+
+        await TaskManager.UpdateTaskAsync(task);
+        // StateHasChanged(); // Removed as ShowCompletionModal will call it or it's called by parent
+
+        // Show positive feedback modal when completing a task
+        if (!wasCompleted && task.IsCompleted)
+        {
+            await ShowCompletionModal(task); // Call await
+        }
+        else
+        {
+            StateHasChanged(); // Ensure UI updates if modal isn't shown
+        }
+    }
+
+    private async Task ShowCompletionModal(TodoTask task) // Changed to async Task
+    {
+        completedTaskTitle = task.Title;
+        showCompletionModal = true;
+        StateHasChanged(); // Ensure modal is rendered before trying to scroll
+        await JSRuntime.InvokeVoidAsync("scrollToElementId", "taskListCompletionModal"); // Added JS interop call
+    }
+
+    private void CloseCompletionModal()
+    {
+        showCompletionModal = false;
+        StateHasChanged();
+    }
+
+    private string GetRandomCelebrationMessage()
+    {
+        var messages = new[]
+        {
+"🌟 You're on fire! One step closer to your goals!",
+"💪 Outstanding progress! Keep up the momentum!",
+"🚀 Task conquered! You're becoming unstoppable!",
+"✨ Fantastic work! Your productivity is inspiring!",
+"🎯 Bulls-eye! Another mission accomplished!",
+"🏆 Champion move! You're crushing it today!",
+"⚡ Lightning fast! Your efficiency is amazing!",
+"🌈 Brilliant! You make productivity look easy!",
+"🔥 On a roll! Nothing can stop you now!",
+"💎 Stellar performance! You're a true achiever!"
+};
+
+        var random = new Random();
+        return messages[random.Next(messages.Length)];
+    }
+
+    private async Task DeleteTask(Guid taskId)
+    {
+        await TaskManager.DeleteTaskAsync(taskId);
+    }
+
+    private async Task StartEdit(TodoTask task)
+    {
+        await OnEditTask.InvokeAsync(task);
+    }
+
+    public void Dispose()
+    {
+        TaskManager.TasksChanged -= OnTasksChanged;
+    }
+}

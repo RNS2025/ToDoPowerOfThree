@@ -1,0 +1,310 @@
+@inject TaskManager TaskManager
+@implements IDisposable
+
+<div class="form-card">
+    <h3>⚡ @(IsEditing ? "Edit Mission" : "Add New Mission")</h3>
+
+    @if (!IsEditing)
+    {
+        <!-- Quick Task Templates -->
+        <div class="quick-templates">
+            <h4>Quick Start Templates</h4>
+            <div class="template-grid">
+                <button type="button" class="template-btn" @onclick="() => ApplyTemplate(TaskTemplate.Meeting)">
+                    📞 Call
+                </button>
+                <button type="button" class="template-btn" @onclick="() => ApplyTemplate(TaskTemplate.Research)">
+                    🔍 Research
+                </button>
+                <button type="button" class="template-btn" @onclick="() => ApplyTemplate(TaskTemplate.Development)">
+                    🐛 Fix Bug
+                </button>
+                <button type="button" class="template-btn" @onclick="() => ApplyTemplate(TaskTemplate.Review)">
+                    📄 Review
+                </button>
+                <button type="button" class="template-btn" @onclick="() => ApplyTemplate(TaskTemplate.Planning)">
+                    📅 Planning
+                </button>
+                <button type="button" class="template-btn" @onclick="() => ApplyTemplate(TaskTemplate.Learning)">
+                    🎓 Learning
+                </button>
+            </div>
+        </div>
+
+        <div class="form-divider">
+            <span>Or create custom task</span>
+        </div>
+    }
+
+    <EditForm Model="@task" OnValidSubmit="SaveTask">
+        <div class="form-group">
+            <InputText @bind-Value="task.Title" @onblur="GenerateDescription" placeholder="Task Title" />
+            @if (!string.IsNullOrEmpty(task.Title) && !hasUserEditedDescription)
+            {
+                <div class="auto-description-hint">
+                    <small>✨ Description will be auto-generated when you finish typing</small>
+                </div>
+            }
+        </div>
+
+        <div class="form-group">
+            <InputTextArea @bind-Value="task.Description" @oninput="OnDescriptionInput"
+                placeholder="Task Description (auto-generated or custom)" />
+            @if (!string.IsNullOrEmpty(generatedDescription) && !hasUserEditedDescription)
+            {
+                <div class="auto-suggestion">
+                    <small>💡 Suggested: @generatedDescription</small>
+                    <button type="button" class="use-suggestion-btn" @onclick="UseSuggestedDescription">Use this</button>
+                </div>
+            }
+        </div>
+
+        <div class="form-group">
+            <InputText @bind-Value="newSubTask" placeholder="Add Subtask" />
+            <button type="button" @onclick="AddSubtask">🔧 Add Subtask</button>
+        </div>
+
+        @if (task.SubTasks.Any())
+        {
+            <div class="subtask-list">
+                @foreach (var sub in task.SubTasks.ToList())
+                {
+                    <div class="subtask-item">
+                        📋 @sub
+                        <button type="button" class="delete-subtask" @onclick="() => RemoveSubtask(sub)">❌</button>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="form-group">
+            <InputDate @bind-Value="task.Deadline" />
+        </div>
+
+        <div class="form-group">
+            <select @bind="task.Priority">
+                <option value="Low">🟢 Low Priority</option>
+                <option value="Medium">🟡 Medium Priority</option>
+                <option value="High">🔴 High Priority</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <InputNumber @bind-Value="task.EstimatedMinutes" placeholder="Estimated minutes" />
+        </div>
+
+        <div class="form-actions">
+            <button type="submit">
+                @(IsEditing ? "🚀 Update Mission" : "🚀 Launch Mission")
+            </button>
+            @if (IsEditing)
+            {
+                <button type="button" @onclick="CancelEdit" class="cancel-button">
+                    ❌ Cancel
+                </button>
+            }
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    [Parameter] public TodoTask? EditTask { get; set; }
+    [Parameter] public EventCallback OnTaskSaved { get; set; }
+    [Parameter] public EventCallback OnEditCancelled { get; set; }
+
+    private TodoTask task = new();
+    private string newSubTask = string.Empty;
+    private bool IsEditing => EditTask != null;
+    private string generatedDescription = string.Empty;
+    private bool hasUserEditedDescription = false;
+
+    public enum TaskTemplate
+    {
+        Meeting,
+        Research,
+        Development,
+        Review,
+        Planning,
+        Learning
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (EditTask != null)
+        {
+            task = new TodoTask
+            {
+                Id = EditTask.Id,
+                Title = EditTask.Title,
+                Description = EditTask.Description,
+                SubTasks = EditTask.SubTasks.ToList(),
+                Deadline = EditTask.Deadline,
+                Priority = EditTask.Priority,
+                EstimatedMinutes = EditTask.EstimatedMinutes,
+                Category = EditTask.Category,
+                IsCompleted = EditTask.IsCompleted,
+                CreatedAt = EditTask.CreatedAt,
+                CompletedAt = EditTask.CompletedAt
+            };
+        }
+        else
+        {
+            task = new TodoTask { Deadline = DateTime.Today.AddDays(1) };
+        }
+    }
+
+    private async Task SaveTask()
+    {
+        if (IsEditing)
+        {
+            await TaskManager.UpdateTaskAsync(task);
+        }
+        else
+        {
+            await TaskManager.AddTaskAsync(task);
+            task = new TodoTask { Deadline = DateTime.Today.AddDays(1) }; // Reset form
+        }
+
+        await OnTaskSaved.InvokeAsync();
+    }
+
+    private void AddSubtask()
+    {
+        if (!string.IsNullOrWhiteSpace(newSubTask))
+        {
+            task.SubTasks.Add(newSubTask);
+            newSubTask = string.Empty;
+        }
+    }
+
+    private void RemoveSubtask(string subtask)
+    {
+        task.SubTasks.Remove(subtask);
+    }
+    private async Task CancelEdit()
+    {
+        await OnEditCancelled.InvokeAsync();
+    }
+    private void ApplyTemplate(TaskTemplate template)
+    {
+        switch (template)
+        {
+            case TaskTemplate.Meeting:
+                task.Title = "Quick sync call";
+                task.Description = "Join team call to align on priorities";
+                task.EstimatedMinutes = 30;
+                task.Priority = "Medium";
+                task.SubTasks.AddRange(new[] { "Check agenda", "Join call" });
+                break;
+            case TaskTemplate.Research:
+                task.Title = "Look into options";
+                task.Description = "Research and compare available solutions";
+                task.EstimatedMinutes = 45;
+                task.Priority = "Medium";
+                task.SubTasks.AddRange(new[] { "Search online", "Take notes", "Share findings" });
+                break;
+            case TaskTemplate.Development:
+                task.Title = "Fix bug";
+                task.Description = "Investigate and resolve reported issue";
+                task.EstimatedMinutes = 60;
+                task.Priority = "High";
+                task.SubTasks.AddRange(new[] { "Reproduce issue", "Find solution", "Test fix" });
+                break;
+            case TaskTemplate.Review:
+                task.Title = "Review document";
+                task.Description = "Check document for accuracy and completeness";
+                task.EstimatedMinutes = 20;
+                task.Priority = "Medium";
+                task.SubTasks.AddRange(new[] { "Read through", "Leave feedback" });
+                break;
+            case TaskTemplate.Planning:
+                task.Title = "Plan next week";
+                task.Description = "Organize tasks and priorities for upcoming week";
+                task.EstimatedMinutes = 30;
+                task.Priority = "High";
+                task.SubTasks.AddRange(new[] { "Check calendar", "List priorities", "Schedule tasks" });
+                break;
+            case TaskTemplate.Learning:
+                task.Title = "Watch tutorial";
+                task.Description = "Learn new skill or tool through online content";
+                task.EstimatedMinutes = 45;
+                task.Priority = "Low";
+                task.SubTasks.AddRange(new[] { "Find tutorial", "Take notes", "Practice" });
+                break;
+        }
+        hasUserEditedDescription = false;
+        StateHasChanged();
+    }
+    private void GenerateDescription()
+    {
+        if (string.IsNullOrWhiteSpace(task.Title) || hasUserEditedDescription)
+            return;
+
+        var title = task.Title.ToLower();
+
+        if (title.Contains("meeting") || title.Contains("call"))
+        {
+            generatedDescription = "Participate in meeting to discuss objectives and next steps";
+        }
+        else if (title.Contains("review") || title.Contains("check"))
+        {
+            generatedDescription = "Review and analyze the specified item for quality and completeness";
+        }
+        else if (title.Contains("fix") || title.Contains("bug") || title.Contains("issue"))
+        {
+            generatedDescription = "Identify root cause and implement solution for the reported issue";
+        }
+        else if (title.Contains("implement") || title.Contains("develop") || title.Contains("build"))
+        {
+            generatedDescription = "Design and implement the requested functionality according to requirements";
+        }
+        else if (title.Contains("test") || title.Contains("qa"))
+        {
+            generatedDescription = "Execute comprehensive testing to ensure functionality meets requirements";
+        }
+        else if (title.Contains("research") || title.Contains("investigate"))
+        {
+            generatedDescription = "Conduct thorough research and analysis to gather relevant information";
+        }
+        else if (title.Contains("plan") || title.Contains("design"))
+        {
+            generatedDescription = "Create detailed plan and design for successful project execution";
+        }
+        else if (title.Contains("update") || title.Contains("upgrade"))
+        {
+            generatedDescription = "Update existing system or component to latest version or requirements";
+        }
+        else if (title.Contains("document") || title.Contains("write"))
+        {
+            generatedDescription = "Create comprehensive documentation for the specified topic";
+        }
+        else
+        {
+            generatedDescription = $"Complete the task: {task.Title}";
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnDescriptionInput(ChangeEventArgs e)
+    {
+        hasUserEditedDescription = !string.IsNullOrWhiteSpace(e.Value?.ToString());
+        if (hasUserEditedDescription)
+        {
+            generatedDescription = string.Empty;
+        }
+    }
+
+    private void UseSuggestedDescription()
+    {
+        task.Description = generatedDescription;
+        generatedDescription = string.Empty;
+        hasUserEditedDescription = true;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        // Cleanup if needed
+    }
+}

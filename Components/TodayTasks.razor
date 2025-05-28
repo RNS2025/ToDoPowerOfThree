@@ -1,0 +1,261 @@
+@using PowerOfThree.Models
+@using PowerOfThree.Services
+@inject TaskManager TaskManager
+@inject IJSRuntime JSRuntime // Added IJSRuntime
+@implements IDisposable
+
+<div class="today-tasks-card">
+    <h2>🎯 TODAY'S POWER OF THREE</h2>
+
+    @if (todaySelection == null)
+    {
+        <div class="no-selection">
+            <div class="selection-hero">
+                <div class="hero-icon">⚡</div>
+                <h3>Ready to Conquer Today?</h3>
+                <p>Choose your generation mode and let's select your 3 power tasks!</p>
+            </div>
+
+            <div class="generation-modes">
+                <button class="mode-button" @onclick="() => GenerateTasks(TaskGenerationMode.Balanced)">
+                    ⚖️ Balanced<br><small>1 High, 1 Medium, 1 Low</small>
+                </button>
+                <button class="mode-button" @onclick="() => GenerateTasks(TaskGenerationMode.ByPriority)">
+                    🔥 Priority First<br><small>Most Important Tasks</small>
+                </button>
+                <button class="mode-button" @onclick="() => GenerateTasks(TaskGenerationMode.ByDeadline)">
+                    ⏰ Deadline Focus<br><small>Most Urgent Tasks</small>
+                </button>
+                <button class="mode-button" @onclick="() => GenerateTasks(TaskGenerationMode.Random)">
+                    🎲 Random<br><small>Surprise Me!</small>
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="selection-header">
+            <div class="selection-info">
+                <span class="mode-badge">@GetModeDisplay(todaySelection.GenerationMode)</span>
+                <span class="progress-badge">@todaySelection.CompletedCount/3 Complete</span>
+            </div>
+            <div class="selection-actions">
+                <button class="regenerate-btn" @onclick="RegenerateTasks">🔄 Regenerate</button>
+                <button class="clear-btn" @onclick="ClearSelection">❌ Clear</button>
+            </div>
+        </div>
+
+        @if (todaySelection.IsAllCompleted)
+        {
+            <div class="completion-celebration">
+                <div class="celebration-content">
+                    <div class="celebration-icon">🎉</div>
+                    <h3>AMAZING! YOU DID IT!</h3>
+                    <p>You've completed all 3 tasks today! You're unstoppable! 🚀</p>
+                    <div class="celebration-stats">
+                        <div class="stat">
+                            <div class="stat-number">3</div>
+                            <div class="stat-label">Tasks Crushed</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">100%</div>
+                            <div class="stat-label">Success Rate</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">💪</div>
+                            <div class="stat-label">Power Level</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="today-tasks-list">
+            @foreach (var task in todaySelection.SelectedTasks)
+            {
+                <div class="today-task-item @(task.IsCompleted ? "completed" : "")">
+                    <div class="task-checkbox" @onclick="() => ToggleTaskCompletion(task)">
+                        <input type="checkbox" checked="@task.IsCompleted" />
+                        <span class="checkmark"></span>
+                    </div>
+
+                    <div class="task-content">
+                        <div class="task-header">
+                            <div class="task-title">@task.Title</div>
+                            <div class="task-priority priority-@task.Priority.ToLower()">@task.Priority</div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(task.Description))
+                        {
+                            <div class="task-description">@task.Description</div>
+                        }
+
+                        <div class="task-meta">
+                            <span class="deadline">📅 @task.Deadline.ToShortDateString()</span>
+                            <span class="estimation">⏱️ @task.EstimatedMinutes min</span>
+                        </div>
+
+                        @if (task.SubTasks.Any())
+                        {
+                            <div class="task-subtasks">
+                                @foreach (var subtask in task.SubTasks)
+                                {
+                                    <div class="subtask">⚙️ @subtask</div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @if (task.IsCompleted)
+                    {
+                        <div class="completion-badge">
+                            ✅ DONE!
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Completion Celebration Modal -->
+@if (showCompletionModal)
+{
+    <div class="modal-overlay" @onclick="CloseCompletionModal" id="todayTasksCompletionModal"> 
+        <div class="completion-modal" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <span class="celebration-icon">🎉</span>
+                <h2>Mission Accomplished!</h2>
+                <p>You've successfully completed: <strong>@completedTaskTitle</strong></p>
+                <p class="celebration-message">@GetRandomCelebrationMessage()</p>
+                <div class="modal-actions">
+                    <button class="celebrate-btn" @onclick="CloseCompletionModal">Sweet!</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DailyTaskSelection? todaySelection;
+    private bool showCompletionModal = false;
+    private string completedTaskTitle = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await TaskManager.InitializeAsync();
+        todaySelection = TaskManager.GetTodaySelection();
+
+        TaskManager.TodaySelectionChanged += OnTodaySelectionChanged;
+        TaskManager.TasksChanged += OnTasksChanged;
+    }
+
+    private async Task GenerateTasks(TaskGenerationMode mode)
+    {
+        todaySelection = await TaskManager.GenerateTodayTasksAsync(mode);
+        StateHasChanged();
+    }
+
+    private async Task RegenerateTasks()
+    {
+        if (todaySelection != null)
+        {
+            await GenerateTasks(todaySelection.GenerationMode);
+        }
+    }
+
+    private async Task ClearSelection()
+    {
+        await TaskManager.ClearTodaySelectionAsync();
+        todaySelection = null;
+        StateHasChanged();
+    }
+
+    private async Task ToggleTaskCompletion(TodoTask task) // Changed to async Task
+    {
+        bool wasCompleted = task.IsCompleted;
+        task.IsCompleted = !task.IsCompleted;
+
+        if (task.IsCompleted)
+        {
+            task.CompletedAt = DateTime.Now;
+        }
+        else
+        {
+            task.CompletedAt = null;
+        }
+
+        await TaskManager.UpdateTaskAsync(task);
+        // StateHasChanged(); // Removed as ShowCompletionModal will call it or it's called by parent
+
+        // Show positive feedback modal when completing a task
+        if (!wasCompleted && task.IsCompleted)
+        {
+            await ShowCompletionModal(task); // Call await
+        }
+        else
+        {
+            StateHasChanged(); // Ensure UI updates if modal isn't shown
+        }
+    }
+
+    private async Task ShowCompletionModal(TodoTask task) // Changed to async Task
+    {
+        completedTaskTitle = task.Title;
+        showCompletionModal = true;
+        StateHasChanged(); // Ensure modal is rendered before trying to scroll
+        await JSRuntime.InvokeVoidAsync("scrollToElementId", "todayTasksCompletionModal"); // Added JS interop call
+    }
+
+    private void CloseCompletionModal()
+    {
+        showCompletionModal = false;
+        StateHasChanged();
+    }
+
+    private string GetRandomCelebrationMessage()
+    {
+        var messages = new[]
+        {
+"🌟 You're on fire! One step closer to your goals!",
+"💪 Outstanding progress! Keep up the momentum!",
+"🚀 Task conquered! You're becoming unstoppable!",
+"✨ Fantastic work! Your productivity is inspiring!",
+"🎯 Bulls-eye! Another mission accomplished!",
+"🏆 Champion move! You're crushing it today!",
+"⚡ Lightning fast! Your efficiency is amazing!",
+"🌈 Brilliant! You make productivity look easy!",
+"🔥 On a roll! Nothing can stop you now!",
+"💎 Stellar performance! You're a true achiever!"
+};
+
+        var random = new Random();
+        return messages[random.Next(messages.Length)];
+    }
+
+    private void OnTodaySelectionChanged()
+    {
+        todaySelection = TaskManager.GetTodaySelection();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTasksChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetModeDisplay(TaskGenerationMode mode) => mode switch
+    {
+        TaskGenerationMode.Balanced => "⚖️ Balanced",
+        TaskGenerationMode.ByPriority => "🔥 Priority",
+        TaskGenerationMode.ByDeadline => "⏰ Deadline",
+        TaskGenerationMode.Random => "🎲 Random",
+        _ => "Unknown"
+    };
+
+    public void Dispose()
+    {
+        TaskManager.TodaySelectionChanged -= OnTodaySelectionChanged;
+        TaskManager.TasksChanged -= OnTasksChanged;
+    }
+}

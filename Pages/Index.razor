@@ -1,0 +1,59 @@
+@page "/"
+@using PowerOfThree.Models
+@using PowerOfThree.Components
+<!-- Today's Three Tasks - Main Focus -->
+<TodayTasks />
+
+<!-- Task Management Section -->
+@if (!showForm)
+{
+    <div class="form-card">
+        <div class="add-task-prompt">
+            <h3>🚀 Ready for a New Mission?</h3>
+            <p>Add a new task to your arsenal and dominate your goals!</p>
+            <button class="add-task-btn" @onclick="ShowForm">
+                ➕ Add New Mission
+            </button>
+        </div>
+    </div>
+}
+else
+{
+    <TaskForm EditTask="@editingTask" OnTaskSaved="OnTaskSaved" OnEditCancelled="OnEditCancelled" />
+}
+
+<!-- All Tasks List -->
+<TaskList OnEditTask="StartEdit" />
+
+@code {
+    private bool showForm = false;
+    private TodoTask? editingTask = null;
+
+    private void ShowForm()
+    {
+        showForm = true;
+        editingTask = null;
+    }
+
+    private void HideForm()
+    {
+        showForm = false;
+        editingTask = null;
+    }
+
+    private void OnTaskSaved()
+    {
+        HideForm();
+    }
+
+    private void OnEditCancelled()
+    {
+        HideForm();
+    }
+
+    private void StartEdit(TodoTask task)
+    {
+        editingTask = task;
+        showForm = true;
+    }
+}
