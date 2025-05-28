@@ -1,0 +1,23 @@
+{
+  "name": "Power Of Three",
+  "short_name": "PowerOf3",
+  "description": "Your daily Power of Three task manager.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    {
+      "src": "favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "favicon_512.png", // Create a 512x512 version of your icon
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
