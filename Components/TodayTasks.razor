@@ -73,45 +73,47 @@
         <div class="today-tasks-list">
             @foreach (var task in todaySelection.SelectedTasks)
             {
-                <div class="today-task-item @(task.IsCompleted ? "completed" : "")">
-                    <div class="task-checkbox" @onclick="() => ToggleTaskCompletion(task)">
-                        <input type="checkbox" checked="@task.IsCompleted" />
-                        <span class="checkmark"></span>
-                    </div>
-
-                    <div class="task-content">
+                <div class="task-card task-item @(task.IsCompleted ? "completed" : "")">
+                    <div class="task-card-header">
                         <div class="task-header">
+                            <div class="task-checkbox" @onclick="() => ToggleTaskCompletion(task)">
+                                <input type="checkbox" checked="@task.IsCompleted" />
+                                <span class="checkmark"></span>
+                            </div>
                             <div class="task-title">@task.Title</div>
                             <div class="task-priority priority-@task.Priority.ToLower()">@task.Priority</div>
                         </div>
-
+                    </div>
+                    <div class="task-card-content">
                         @if (!string.IsNullOrEmpty(task.Description))
                         {
-                            <div class="task-description">@task.Description</div>
+                            <div class="task-description">
+                                <strong>📝 Description:</strong> @task.Description
+                            </div>
                         }
-
                         <div class="task-meta">
-                            <span class="deadline">📅 @task.Deadline.ToShortDateString()</span>
-                            <span class="estimation">⏱️ @task.EstimatedMinutes min</span>
+                            <span class="task-meta-deadline">
+                                <i class="fas fa-calendar-alt"></i>
+                                <strong>Deadline:</strong> @task.Deadline.ToShortDateString()
+                            </span>
+                            <span class="task-meta-estimate">
+                                <i class="fas fa-clock"></i>
+                                <strong>Estimated:</strong> @task.EstimatedMinutes min
+                            </span>
                         </div>
-
                         @if (task.SubTasks.Any())
                         {
                             <div class="task-subtasks">
-                                @foreach (var subtask in task.SubTasks)
-                                {
-                                    <div class="subtask">⚙️ @subtask</div>
-                                }
+                                <strong>🔧 Subtasks:</strong>
+                                <ul class="subtasks-list">
+                                    @foreach (var sub in task.SubTasks)
+                                    {
+                                        <li class="subtask-item">⚙️ @sub</li>
+                                    }
+                                </ul>
                             </div>
                         }
                     </div>
-
-                    @if (task.IsCompleted)
-                    {
-                        <div class="completion-badge">
-                            ✅ DONE!
-                        </div>
-                    }
                 </div>
             }
         </div>

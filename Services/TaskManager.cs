@@ -20,6 +20,27 @@ namespace PowerOfThree.Services
         public async Task InitializeAsync()
         {
             _tasks = await _localStorage.GetItemAsync<List<TodoTask>>("tasks") ?? new();
+
+            // Catch-up logic for recurring tasks
+            bool tasksModified = false;
+            foreach (var task in _tasks)
+            {
+                if (task.IsRecurring && task.RecurrenceUnit != RecurrenceUnitType.None && task.Deadline < DateTime.Today)
+                {
+                    // Advance deadline until it's today or in the future
+                    while (task.Deadline < DateTime.Today)
+                    {
+                        task.Deadline = CalculateNextDueDate(task.Deadline, task.RecurrenceUnit, task.RecurrenceInterval);
+                        tasksModified = true;
+                    }
+                    task.IsCompleted = false; // Ensure it's not marked completed if its deadline passed
+                }
+            }
+            if (tasksModified)
+            {
+                await SaveTasksAsync(); // Save changes if any deadlines were advanced
+            }
+
             _todaySelection = await _localStorage.GetItemAsync<DailyTaskSelection>("todaySelection");
 
             // Reset today's selection if it's from a different day
@@ -45,6 +66,26 @@ namespace PowerOfThree.Services
             var index = _tasks.FindIndex(t => t.Id == updatedTask.Id);
             if (index >= 0)
             {
+                // Handle completion logic for recurring tasks specifically
+                if (updatedTask.IsCompleted && updatedTask.IsRecurring && updatedTask.RecurrenceUnit != RecurrenceUnitType.None)
+                {
+                    var originalTask = _tasks[index]; // Get current deadline before updating
+                    updatedTask.CompletedAt = DateTime.Now; // Mark when this instance was completed
+                    updatedTask.Deadline = CalculateNextDueDate(originalTask.Deadline, updatedTask.RecurrenceUnit, updatedTask.RecurrenceInterval);
+                    updatedTask.IsCompleted = false; // Reset for the next occurrence
+                }
+                else if (updatedTask.IsCompleted) // Non-recurring task completed
+                {
+                    updatedTask.CompletedAt = DateTime.Now;
+                }
+                // If a recurring task is being edited and IsRecurring is unchecked, or unit is None
+                if (!updatedTask.IsRecurring || updatedTask.RecurrenceUnit == RecurrenceUnitType.None)
+                {
+                    updatedTask.IsRecurring = false; // Ensure consistency
+                    updatedTask.RecurrenceUnit = RecurrenceUnitType.None;
+                }
+
+
                 _tasks[index] = updatedTask;
                 await SaveTasksAsync();
 
@@ -54,12 +95,13 @@ namespace PowerOfThree.Services
                     var selectionIndex = _todaySelection.SelectedTasks.FindIndex(t => t.Id == updatedTask.Id);
                     if (selectionIndex >= 0)
                     {
+                        // Ensure the task in today's selection reflects the (potentially) new deadline
+                        // and its IsCompleted status (which will be false for a just-completed recurring task)
                         _todaySelection.SelectedTasks[selectionIndex] = updatedTask;
                         await SaveTodaySelectionAsync();
                         TodaySelectionChanged?.Invoke();
                     }
                 }
-
                 TasksChanged?.Invoke();
             }
         }
@@ -158,11 +200,12 @@ namespace PowerOfThree.Services
         private List<TodoTask> SelectBalanced(List<TodoTask> tasks)
         {
             var result = new List<TodoTask>();
+            var availableTasks = tasks.Where(t => !t.IsCompleted).ToList(); // Ensure we only consider non-completed
 
             // Try to get one of each priority
-            var highPriority = tasks.Where(t => t.Priority == "High").OrderBy(t => t.Deadline).FirstOrDefault();
-            var mediumPriority = tasks.Where(t => t.Priority == "Medium").OrderBy(t => t.Deadline).FirstOrDefault();
-            var lowPriority = tasks.Where(t => t.Priority == "Low").OrderBy(t => t.Deadline).FirstOrDefault();
+            var highPriority = availableTasks.Where(t => t.Priority == "High").OrderBy(t => t.Deadline).FirstOrDefault();
+            var mediumPriority = availableTasks.Where(t => t.Priority == "Medium").OrderBy(t => t.Deadline).FirstOrDefault();
+            var lowPriority = availableTasks.Where(t => t.Priority == "Low").OrderBy(t => t.Deadline).FirstOrDefault();
 
             if (highPriority != null) result.Add(highPriority);
             if (mediumPriority != null) result.Add(mediumPriority);
@@ -191,8 +234,33 @@ namespace PowerOfThree.Services
         {
             if (_todaySelection != null)
             {
+                // Ensure tasks in today's selection are fresh copies from _tasks
+                // This is important if a recurring task's deadline was advanced.
+                for (int i = 0; i < _todaySelection.SelectedTasks.Count; i++)
+                {
+                    var selectedTaskId = _todaySelection.SelectedTasks[i].Id;
+                    var masterTask = _tasks.FirstOrDefault(t => t.Id == selectedTaskId);
+                    if (masterTask != null)
+                    {
+                        _todaySelection.SelectedTasks[i] = masterTask;
+                    }
+                }
                 await _localStorage.SetItemAsync("todaySelection", _todaySelection);
             }
+        }
+
+        private DateTime CalculateNextDueDate(DateTime currentDueDate, RecurrenceUnitType unit, int interval)
+        {
+            if (interval <= 0) interval = 1; // Ensure interval is positive
+
+            return unit switch
+            {
+                RecurrenceUnitType.Day => currentDueDate.AddDays(interval),
+                RecurrenceUnitType.Week => currentDueDate.AddDays(interval * 7),
+                RecurrenceUnitType.Month => currentDueDate.AddMonths(interval),
+                RecurrenceUnitType.Year => currentDueDate.AddYears(interval),
+                _ => currentDueDate.AddDays(1) // Default or None case
+            };
         }
     }
 }

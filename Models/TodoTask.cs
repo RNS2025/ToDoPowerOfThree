@@ -14,6 +14,20 @@ namespace PowerOfThree.Models
         public bool IsSelectedForToday { get; set; } = false;
         public string Category { get; set; } = "General"; // For better organization
         public int EstimatedMinutes { get; set; } = 30; // Time estimation
+
+        // Recurrence Properties
+        public bool IsRecurring { get; set; } = false;
+        public RecurrenceUnitType RecurrenceUnit { get; set; } = RecurrenceUnitType.None;
+        public int RecurrenceInterval { get; set; } = 1; // e.g., Every 1 Day, Every 2 Weeks
+    }
+
+    public enum RecurrenceUnitType
+    {
+        None,
+        Day,
+        Week,
+        Month,
+        Year
     }
 
     public enum TaskGenerationMode

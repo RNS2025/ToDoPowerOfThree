@@ -37,8 +37,18 @@
     }
 
     <EditForm Model="@task" OnValidSubmit="SaveTask">
+        <DataAnnotationsValidator />
+
         <div class="form-group">
-            <InputText @bind-Value="task.Title" @onblur="GenerateDescription" placeholder="Task Title" />
+            <label for="task-title">Title:</label>
+            <InputText id="task-title" class="form-control" @bind-Value="task.Title" placeholder="e.g., Conquer the world" />
+            <ValidationMessage For="@(() => task.Title)" />
+        </div>
+
+        <div class="form-group">
+            <label for="task-description">Description:</label>
+            <InputTextArea id="task-description" class="form-control" @bind-Value="task.Description" placeholder="Details about your mission..." @oninput="OnDescriptionInput" />
+            <ValidationMessage For="@(() => task.Description)" />
             @if (!string.IsNullOrEmpty(task.Title) && !hasUserEditedDescription)
             {
                 <div class="auto-description-hint">
@@ -48,58 +58,100 @@
         </div>
 
         <div class="form-group">
-            <InputTextArea @bind-Value="task.Description" @oninput="OnDescriptionInput"
-                placeholder="Task Description (auto-generated or custom)" />
-            @if (!string.IsNullOrEmpty(generatedDescription) && !hasUserEditedDescription)
-            {
-                <div class="auto-suggestion">
-                    <small>💡 Suggested: @generatedDescription</small>
-                    <button type="button" class="use-suggestion-btn" @onclick="UseSuggestedDescription">Use this</button>
-                </div>
-            }
+            <label for="task-deadline">Deadline:</label>
+            <InputDate id="task-deadline" class="form-control" @bind-Value="task.Deadline" />
+            <ValidationMessage For="@(() => task.Deadline)" />
         </div>
 
         <div class="form-group">
-            <InputText @bind-Value="newSubTask" placeholder="Add Subtask" />
-            <button type="button" @onclick="AddSubtask">🔧 Add Subtask</button>
-        </div>
-
-        @if (task.SubTasks.Any())
-        {
-            <div class="subtask-list">
-                @foreach (var sub in task.SubTasks.ToList())
-                {
-                    <div class="subtask-item">
-                        📋 @sub
-                        <button type="button" class="delete-subtask" @onclick="() => RemoveSubtask(sub)">❌</button>
-                    </div>
-                }
-            </div>
-        }
-
-        <div class="form-group">
-            <InputDate @bind-Value="task.Deadline" />
-        </div>
-
-        <div class="form-group">
-            <select @bind="task.Priority">
+            <label for="task-priority">Priority:</label>
+            <InputSelect id="task-priority" class="form-control" @bind-Value="task.Priority">
                 <option value="Low">🟢 Low Priority</option>
                 <option value="Medium">🟡 Medium Priority</option>
                 <option value="High">🔴 High Priority</option>
-            </select>
+            </InputSelect>
+            <ValidationMessage For="@(() => task.Priority)" />
         </div>
 
         <div class="form-group">
-            <InputNumber @bind-Value="task.EstimatedMinutes" placeholder="Estimated minutes" />
+            <label for="task-category">Category:</label>
+            <InputText id="task-category" class="form-control" @bind-Value="task.Category" placeholder="e.g., Work, Personal" />
+            <ValidationMessage For="@(() => task.Category)" />
         </div>
 
+        <div class="form-group">
+            <label for="estimated-minutes">Estimated Time (minutes):</label>
+            <InputNumber id="estimated-minutes" class="form-control" @bind-Value="task.EstimatedMinutes" placeholder="e.g., 30" />
+            <ValidationMessage For="@(() => task.EstimatedMinutes)" />
+            <div class="quick-time-estimates">
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(5)">☕ 5m</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(15)">⏱️ 15m</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(30)">⏳ 30m</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(60)">💡 1h</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(90)">✨ 1.5h</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(120)">🚀 2h</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(180)">📚 3h</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(240)">🌓 4h</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(360)">🌔 6h</button>
+                <button type="button" class="time-btn" @onclick="() => SetEstimatedTime(480)">☀️ 8h</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="subtasks">Subtasks:</label>
+            @foreach (var sub in task.SubTasks)
+            {
+                <div class="subtask-item d-flex justify-content-between align-items-center mb-1">
+                    <span>@sub</span>
+                    <button type="button" class="btn btn-sm btn-danger btn-remove-subtask" @onclick="() => RemoveSubtask(sub)">❌</button>
+                </div>
+            }
+            <div class="add-subtask input-group mt-2">
+                <InputText @bind-Value="newSubTask" class="form-control" placeholder="New subtask" />
+                <button type="button" class="btn btn-outline-secondary" @onclick="AddSubtask">➕ Add</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <div class="form-check">
+                <InputCheckbox id="is-recurring" class="form-check-input" @bind-Value="task.IsRecurring" />
+                <label class="form-check-label" for="is-recurring">
+                    🔁 Make this a recurring task
+                </label>
+            </div>
+        </div>
+
+        @if (task.IsRecurring)
+        {
+            <div class="recurrence-options">
+                <h4>Recurrence Settings</h4>
+                <div class="form-group">
+                    <label for="recurrence-unit">Repeats:</label>
+                    <InputSelect id="recurrence-unit" class="form-control" @bind-Value="task.RecurrenceUnit">
+                        @foreach (var unit in Enum.GetValues(typeof(RecurrenceUnitType)))
+                        {
+                            if ((RecurrenceUnitType)unit == RecurrenceUnitType.None && task.RecurrenceUnit != RecurrenceUnitType.None) continue;
+                            <option value="@unit">@unit</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="form-group">
+                    <label for="recurrence-interval">Every:</label>
+                    <div class="input-group">
+                        <InputNumber id="recurrence-interval" class="form-control" @bind-Value="task.RecurrenceInterval" min="1" />
+                        <span class="input-group-text">@(task.RecurrenceUnit.ToString().ToLower() + (task.RecurrenceInterval > 1 ? "s" : ""))</span>
+                    </div>
+                </div>
+            </div>
+        }
+
         <div class="form-actions">
-            <button type="submit">
+            <button type="submit" class="btn btn-primary">
                 @(IsEditing ? "🚀 Update Mission" : "🚀 Launch Mission")
             </button>
             @if (IsEditing)
             {
-                <button type="button" @onclick="CancelEdit" class="cancel-button">
+                <button type="button" @onclick="CancelEdit" class="btn btn-secondary">
                     ❌ Cancel
                 </button>
             }
@@ -117,6 +169,21 @@
     private bool IsEditing => EditTask != null;
     private string generatedDescription = string.Empty;
     private bool hasUserEditedDescription = false;
+
+    // New dictionary for time estimate references (optional, for future use or display)
+    private Dictionary<int, string> timeEstimateReferences = new()
+    {
+        { 5, "Quick check-in" },
+        { 15, "Short task/email" },
+        { 30, "Focused work block" },
+        { 60, "Deep work session" },
+        { 90, "Extended focus" },
+        { 120, "Large task/meeting" },
+        { 180, "Deep dive session" },
+        { 240, "Half-day task" },
+        { 360, "Significant work block" },
+        { 480, "Full-day task" }
+    };
 
     public enum TaskTemplate
     {
@@ -142,19 +209,36 @@
                 Priority = EditTask.Priority,
                 EstimatedMinutes = EditTask.EstimatedMinutes,
                 Category = EditTask.Category,
-                IsCompleted = EditTask.IsCompleted,
+                IsCompleted = EditTask.IsCompleted, // This will be handled differently for recurring
                 CreatedAt = EditTask.CreatedAt,
-                CompletedAt = EditTask.CompletedAt
+                CompletedAt = EditTask.CompletedAt,
+                IsRecurring = EditTask.IsRecurring,
+                RecurrenceUnit = EditTask.RecurrenceUnit,
+                RecurrenceInterval = EditTask.RecurrenceInterval
             };
+            // If editing a recurring task that was somehow marked completed, reset for editing.
+            if (task.IsRecurring) task.IsCompleted = false;
         }
         else
         {
-            task = new TodoTask { Deadline = DateTime.Today.AddDays(1) };
+            task = new TodoTask { Deadline = DateTime.Today.AddDays(1), RecurrenceInterval = 1, RecurrenceUnit = RecurrenceUnitType.None };
         }
+        hasUserEditedDescription = !string.IsNullOrWhiteSpace(task.Description); // Ensure this is set correctly
     }
 
     private async Task SaveTask()
     {
+        if (task.IsRecurring && task.RecurrenceUnit == RecurrenceUnitType.None)
+        {
+            // Optionally, prevent saving or auto-disable recurrence
+            // For now, we'll let it save, but it won't recur.
+            // Or, you could add a validation message.
+        }
+        if (task.IsRecurring)
+        {
+            task.IsCompleted = false; // Recurring tasks are never "finally" completed, they just reset.
+        }
+
         if (IsEditing)
         {
             await TaskManager.UpdateTaskAsync(task);
@@ -301,6 +385,12 @@
         generatedDescription = string.Empty;
         hasUserEditedDescription = true;
         StateHasChanged();
+    }
+
+    private void SetEstimatedTime(int minutes)
+    {
+        task.EstimatedMinutes = minutes;
+        StateHasChanged(); // Ensure the InputNumber updates if it's bound
     }
 
     public void Dispose()

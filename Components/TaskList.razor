@@ -1,105 +1,122 @@
 @using PowerOfThree.Models
 @using PowerOfThree.Services
+@using Microsoft.JSInterop
 @inject TaskManager TaskManager
-@inject IJSRuntime JSRuntime // Added IJSRuntime
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
-<div class="task-card">
-    <h3>📊 Mission Control Center</h3>
-
-    @if (tasks is not null && tasks.Any())
-    {
-        <div class="task-stats">
-            <div class="stat-item">
-                <div class="stat-number">@tasks.Count</div>
-                <div class="stat-label">Total Tasks</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-number">@tasks.Count(t => t.IsCompleted)</div>
-                <div class="stat-label">Completed</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-number">@tasks.Count(t => !t.IsCompleted)</div>
-                <div class="stat-label">Pending</div>
-            </div>
-        </div>
-        <div class="task-filters">
-            <button class="filter-btn @(activeFilter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>
-                All Tasks
-            </button>
-            <button class="filter-btn @(activeFilter == "pending" ? "active" : "")" @onclick='() => SetFilter("pending")'>
-                Pending
-            </button>
-            <button class="filter-btn @(activeFilter == "completed" ? "active" : "")"
-                @onclick='() => SetFilter("completed")'>
-                Completed
-            </button>
-        </div>
-
-        <div class="tasks-list">
-            @foreach (var task in GetFilteredTasks())
-            {
-                <div class="task-item @(task.IsCompleted ? "completed" : "")">
-                    <div class="task-checkbox" @onclick="() => ToggleTaskCompletion(task)">
-                        <input type="checkbox" checked="@task.IsCompleted" />
-                        <span class="checkmark"></span>
-                    </div>
-
-                    <div class="task-content">
-                        <div class="task-header">
-                            <div class="task-title">🎯 @task.Title</div>
-                            <div class="task-actions">
-                                <button class="edit-btn" @onclick="() => StartEdit(task)">✏️</button>
-                                <button class="delete-btn" @onclick="() => DeleteTask(task.Id)">🗑️</button>
-                            </div>
-                        </div>
-
-                        <div class="task-priority priority-@task.Priority.ToLower()">@task.Priority Priority</div>
-
-                        <div class="task-meta">
-                            <span><strong>📅 Deadline:</strong> @task.Deadline.ToShortDateString()</span>
-                            <span><strong>⏱️ Estimated:</strong> @task.EstimatedMinutes min</span>
-                        </div>
-
-                        @if (!string.IsNullOrEmpty(task.Description))
-                        {
-                            <div class="task-description">
-                                <strong>📝 Description:</strong> @task.Description
-                            </div>
-                        }
-
-                        @if (task.SubTasks.Any())
-                        {
-                            <div class="task-subtasks">
-                                <strong>🔧 Subtasks:</strong>
-                                <div class="subtask-list">
-                                    @foreach (var st in task.SubTasks)
-                                    {
-                                        <div class="subtask-item">⚙️ @st</div>
-                                    }
-                                </div>
-                            </div>
-                        }
-
-                        @if (task.IsCompleted && task.CompletedAt.HasValue)
-                        {
-                            <div class="completion-info">
-                                <span class="completed-badge">✅ Completed on @task.CompletedAt.Value.ToString("MMM dd, yyyy")</span>
-                            </div>
-                        }
-                    </div>
+<div class="task-card mission-control">
+    <div class="task-card-header">
+        <h3>📊 Mission Control Center</h3>
+    </div>
+    <div class="task-card-content">
+        @if (tasks is not null && tasks.Any())
+        {
+            <div class="task-stats">
+                <div class="stat-item">
+                    <div class="stat-number">@tasks.Count</div>
+                    <div class="stat-label">Total Tasks</div>
                 </div>
-            }
-        </div>
-    }
-    else
-    {
-        <div class="empty-state">
-            <div class="empty-icon">🤖</div>
-            <h4>No missions in the database</h4>
-            <p>Create your first mission above to get started!</p>
-        </div>
-    }
+                <div class="stat-item">
+                    <div class="stat-number">@tasks.Count(t => t.IsCompleted)</div>
+                    <div class="stat-label">Completed</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">@tasks.Count(t => !t.IsCompleted)</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+            </div>
+            <div class="task-filters">
+                <button class="filter-btn @(activeFilter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>
+                    All Tasks
+                </button>
+                <button class="filter-btn @(activeFilter == "pending" ? "active" : "")" @onclick='() => SetFilter("pending")'>
+                    Pending
+                </button>
+                <button class="filter-btn @(activeFilter == "completed" ? "active" : "")"
+                        @onclick='() => SetFilter("completed")'>
+                    Completed
+                </button>
+            </div>
+
+            <div class="task-list-container">
+                @foreach (var task in GetFilteredTasks())
+                {
+                    <div class="task-card task-item @(task.IsCompleted ? "completed" : "")">
+                        <div class="task-card-header">
+                            <div class="task-header">
+                                <div class="task-checkbox" @onclick="() => ToggleTaskCompletion(task)">
+                                    <input type="checkbox" checked="@task.IsCompleted" />
+                                    <span class="checkmark"></span>
+                                </div>
+                                <div class="task-title">🎯 @task.Title</div>
+                                <div class="task-priority priority-@task.Priority.ToLower()">@task.Priority</div>
+                            </div>
+                        </div>
+                        <div class="task-card-content">
+                            @if (!string.IsNullOrEmpty(task.Description))
+                            {
+                                <div class="task-description">
+                                    <strong>📝 Description:</strong> @task.Description
+                                </div>
+                            }
+                            <div class="task-meta">
+                                <span class="task-meta-deadline">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    <strong>Deadline:</strong> @task.Deadline.ToShortDateString()
+                                </span>
+                                <span class="task-meta-estimate">
+                                    <i class="fas fa-clock"></i>
+                                    <strong>Estimated:</strong> @task.EstimatedMinutes min
+                                </span>
+                                @if (task.IsRecurring && task.RecurrenceUnit != RecurrenceUnitType.None)
+                                {
+                                    <span class="recurrence-info">
+                                        <i class="fas fa-redo"></i>
+                                        Every @task.RecurrenceInterval @($"{task.RecurrenceUnit}{(task.RecurrenceInterval > 1 ? "s" : "")}")
+                                    </span>
+                                }
+                            </div>
+                            @if (task.SubTasks.Any())
+                            {
+                                <div class="task-subtasks">
+                                    <strong>🔧 Subtasks:</strong>
+                                    <ul class="subtasks-list">
+                                        @foreach (var st in task.SubTasks)
+                                        {
+                                            <li class="subtask-item">⚙️ @st</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                            @if (task.IsCompleted && task.CompletedAt.HasValue)
+                            {
+                                <div class="completion-info">
+                                    <span class="completed-badge">✅ Completed on @task.CompletedAt.Value.ToString("MMM dd, yyyy")</span>
+                                </div>
+                            }
+                            <div class="task-actions">
+                                <button class="btn btn-edit" @onclick="() => StartEdit(task)">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                                <button class="btn btn-delete" @onclick="() => DeleteTask(task.Id)">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-icon">🤖</div>
+                <h4>No missions in the database</h4>
+                <p>Create your first mission above to get started!</p>
+            </div>
+        }
+    </div>
 </div>
 
 <!-- Completion Celebration Modal -->
@@ -124,6 +141,109 @@
     </div>
 }
 
+<style>
+    /* Updated dark-theme styles */
+    .task-card {
+        background: var(--card-bg);
+        border-radius: var(--border-radius-lg);
+        box-shadow: var(--shadow-lg);
+        margin-bottom: 24px;
+        overflow: hidden;
+        transition: transform 0.2s;
+        border: 1px solid var(--border-color);
+    }
+
+    .task-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-xl);
+    }
+
+    .task-card-header {
+        background-color: var(--card-header-bg);
+        padding: 16px;
+        border-bottom: 1px solid var(--border-hover);
+    }
+
+    .task-card-content {
+        padding: 16px;
+        color: var(--text-primary);
+    }
+
+    .task-title {
+        font-size: 18px;
+        font-weight: 500;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .task-description {
+        margin: 12px 0;
+        color: var(--text-secondary);
+    }
+
+    .task-meta {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+    }
+
+    .task-meta i {
+        margin-right: 4px;
+        color: var(--text-secondary);
+    }
+
+    .task-checkbox .checkmark {
+        background-color: var(--primary-blue);
+    }
+
+    .task-checkbox input:checked + .checkmark {
+        background-color: var(--success-color);
+    }
+
+    .btn {
+        background-color: var(--primary-blue);
+        color: var(--text-primary);
+        border-radius: var(--border-radius);
+        padding: 8px 16px;
+        transition: background-color 0.2s;
+    }
+
+    .btn:hover {
+        background-color: var(--secondary-blue-hover);
+    }
+
+    .modal-overlay {
+        background-color: rgba(0, 0, 0, 0.7);
+    }
+
+    .completion-modal {
+        background-color: var(--card-bg);
+        color: var(--text-primary);
+        border-radius: var(--border-radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .celebrate-btn {
+        background-color: var(--success-color);
+        color: var(--text-primary);
+    }
+
+    /* Responsive overrides */
+    @@media (max-width: 768px) {
+        .task-card { margin-bottom: 1rem; }
+        .task-title { font-size: 16px; }
+        .task-meta { font-size: 12px; }
+        .btn { font-size: 12px; padding: 6px 12px; }
+        .completion-modal { padding: 16px; }
+        .celebrate-btn { font-size: 14px; padding: 8px 16px; }
+    }
+
+    @@media (max-width: 480px) {
+        .task-card-header h3 { font-size: 1.25rem; }
+    }
+</style>
+
 @code {
     [Parameter] public EventCallback<TodoTask> OnEditTask { get; set; }
 
@@ -136,7 +256,6 @@
     {
         await TaskManager.InitializeAsync();
         tasks = TaskManager.GetAllTasks();
-
         TaskManager.TasksChanged += OnTasksChanged;
     }
 
@@ -161,7 +280,7 @@
         activeFilter = filter;
     }
 
-    private async Task ToggleTaskCompletion(TodoTask task) // Changed to async Task
+    private async Task ToggleTaskCompletion(TodoTask task)
     {
         bool wasCompleted = task.IsCompleted;
         task.IsCompleted = !task.IsCompleted;
@@ -176,25 +295,23 @@
         }
 
         await TaskManager.UpdateTaskAsync(task);
-        // StateHasChanged(); // Removed as ShowCompletionModal will call it or it's called by parent
 
-        // Show positive feedback modal when completing a task
         if (!wasCompleted && task.IsCompleted)
         {
-            await ShowCompletionModal(task); // Call await
+            await ShowCompletionModal(task);
         }
         else
         {
-            StateHasChanged(); // Ensure UI updates if modal isn't shown
+            StateHasChanged();
         }
     }
 
-    private async Task ShowCompletionModal(TodoTask task) // Changed to async Task
+    private async Task ShowCompletionModal(TodoTask task)
     {
         completedTaskTitle = task.Title;
         showCompletionModal = true;
-        StateHasChanged(); // Ensure modal is rendered before trying to scroll
-        await JSRuntime.InvokeVoidAsync("scrollToElementId", "taskListCompletionModal"); // Added JS interop call
+        StateHasChanged();
+        await JSRuntime.InvokeVoidAsync("scrollToElementId", "taskListCompletionModal");
     }
 
     private void CloseCompletionModal()
@@ -207,18 +324,17 @@
     {
         var messages = new[]
         {
-"🌟 You're on fire! One step closer to your goals!",
-"💪 Outstanding progress! Keep up the momentum!",
-"🚀 Task conquered! You're becoming unstoppable!",
-"✨ Fantastic work! Your productivity is inspiring!",
-"🎯 Bulls-eye! Another mission accomplished!",
-"🏆 Champion move! You're crushing it today!",
-"⚡ Lightning fast! Your efficiency is amazing!",
-"🌈 Brilliant! You make productivity look easy!",
-"🔥 On a roll! Nothing can stop you now!",
-"💎 Stellar performance! You're a true achiever!"
-};
-
+            "🌟 You're on fire! One step closer to your goals!",
+            "💪 Outstanding progress! Keep up the momentum!",
+            "🚀 Task conquered! You're becoming unstoppable!",
+            "✨ Fantastic work! Your productivity is inspiring!",
+            "🎯 Bulls-eye! Another mission accomplished!",
+            "🏆 Champion move! You're crushing it today!",
+            "⚡ Lightning fast! Your efficiency is amazing!",
+            "🌈 Brilliant! You make productivity look easy!",
+            "🔥 On a roll! Nothing can stop you now!",
+            "💎 Stellar performance! You're a true achiever!"
+        };
         var random = new Random();
         return messages[random.Next(messages.Length)];
     }
