@@ -4,6 +4,18 @@
 @inject IJSRuntime JSRuntime
 @implements IDisposable
 
+@* Add time limit input *@
+<div class="time-limit-input" style="margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;">
+    <label for="availableMinutes" style="color:var(--text-secondary); white-space:nowrap;">Available Time
+        (min):</label>
+    <button type="button" class="btn btn-secondary" @onclick="() => AdjustTime(-60)">-1h</button>
+    <button type="button" class="btn btn-secondary" @onclick="() => AdjustTime(-15)">-15</button>
+    <input id="availableMinutes" type="number" min="0" step="15" @bind="availableMinutes" class="form-control"
+        style="width:100px; text-align:center;" />
+    <button type="button" class="btn btn-secondary" @onclick="() => AdjustTime(15)">+15</button>
+    <button type="button" class="btn btn-secondary" @onclick="() => AdjustTime(60)">+1h</button>
+</div>
+
 <div class="today-tasks-card">
     <h2>🎯 TODAY'S POWER OF THREE</h2>
 
@@ -159,6 +171,7 @@
     private string completedTaskTitle = "";
     private bool initialNotificationPromptDone = false;
     private bool canShowTestNotificationButton = false;
+    private int availableMinutes = 0; // User-provided time limit
 
     protected override async Task OnInitializedAsync()
     {
@@ -218,7 +231,8 @@
 
     private async Task GenerateTasks(TaskGenerationMode mode)
     {
-        todaySelection = await TaskManager.GenerateTodayTasksAsync(mode);
+        int limit = availableMinutes > 0 ? availableMinutes : int.MaxValue;
+        todaySelection = await TaskManager.GenerateTodayTasksAsync(mode, limit);
         await UpdateTodayTasksInDbForPwa();
         StateHasChanged();
     }
@@ -325,6 +339,11 @@
         TaskGenerationMode.Random => "🎲 Random",
         _ => "Unknown"
     };
+
+    private void AdjustTime(int delta)
+    {
+        availableMinutes = Math.Max(0, availableMinutes + delta);
+    }
 
     public void Dispose()
     {

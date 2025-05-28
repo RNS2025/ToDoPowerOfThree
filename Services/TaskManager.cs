@@ -133,33 +133,38 @@ namespace PowerOfThree.Services
             }
         }
 
-        public async Task<DailyTaskSelection> GenerateTodayTasksAsync(TaskGenerationMode mode)
+        public async Task<DailyTaskSelection> GenerateTodayTasksAsync(TaskGenerationMode mode, int availableMinutes)
         {
-            var availableTasks = _tasks.Where(t => !t.IsCompleted).ToList();
-            var selectedTasks = new List<TodoTask>();
-
-            switch (mode)
+            var allAvailable = _tasks.Where(t => !t.IsCompleted).ToList();
+            var random = new Random();
+            IEnumerable<TodoTask> sortedTasks = mode switch
             {
-                case TaskGenerationMode.Random:
-                    selectedTasks = SelectRandomTasks(availableTasks, 3);
-                    break;
+                TaskGenerationMode.Random => allAvailable.OrderBy(x => random.Next()),
+                TaskGenerationMode.ByPriority => allAvailable.OrderByDescending(t =>
+                    new Dictionary<string, int>{{"High",3},{"Medium",2},{"Low",1}}
+                        .GetValueOrDefault(t.Priority,0)
+                ).ThenBy(t => t.Deadline),
+                TaskGenerationMode.ByDeadline => allAvailable.OrderBy(t => t.Deadline),
+                TaskGenerationMode.Balanced => SelectBalanced(allAvailable),
+                _ => allAvailable
+            };
 
-                case TaskGenerationMode.ByPriority:
-                    selectedTasks = SelectByPriority(availableTasks);
-                    break;
-
-                case TaskGenerationMode.ByDeadline:
-                    selectedTasks = SelectByDeadline(availableTasks);
-                    break;
-
-                case TaskGenerationMode.Balanced:
-                    selectedTasks = SelectBalanced(availableTasks);
-                    break;
+            var selected = new List<TodoTask>();
+            int timeSum = 0;
+            foreach (var task in sortedTasks)
+            {
+                if (timeSum + task.EstimatedMinutes <= availableMinutes)
+                {
+                    selected.Add(task);
+                    timeSum += task.EstimatedMinutes;
+                    if (selected.Count == 3)
+                        break;
+                }
             }
 
             _todaySelection = new DailyTaskSelection
             {
-                SelectedTasks = selectedTasks,
+                SelectedTasks = selected,
                 SelectionDate = DateTime.Today,
                 GenerationMode = mode
             };
@@ -169,35 +174,7 @@ namespace PowerOfThree.Services
             return _todaySelection;
         }
 
-        private List<TodoTask> SelectRandomTasks(List<TodoTask> tasks, int count)
-        {
-            var random = new Random();
-            return tasks.OrderBy(x => random.Next()).Take(Math.Min(count, tasks.Count)).ToList();
-        }
-
-        private List<TodoTask> SelectByPriority(List<TodoTask> tasks)
-        {
-            var priorityOrder = new Dictionary<string, int>
-            {
-                {"High", 3}, {"Medium", 2}, {"Low", 1}
-            };
-
-            return tasks
-                .OrderByDescending(t => priorityOrder.GetValueOrDefault(t.Priority, 0))
-                .ThenBy(t => t.Deadline)
-                .Take(3)
-                .ToList();
-        }
-
-        private List<TodoTask> SelectByDeadline(List<TodoTask> tasks)
-        {
-            return tasks
-                .OrderBy(t => t.Deadline)
-                .Take(3)
-                .ToList();
-        }
-
-        private List<TodoTask> SelectBalanced(List<TodoTask> tasks)
+        private IEnumerable<TodoTask> SelectBalanced(List<TodoTask> tasks)
         {
             var result = new List<TodoTask>();
             var availableTasks = tasks.Where(t => !t.IsCompleted).ToList(); // Ensure we only consider non-completed
